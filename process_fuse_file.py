@@ -95,35 +95,24 @@ def update_diff(data, preview_num=5, hex_recurrence=4, header_length=7, skip_las
 
 # %%
 w_opts = dict(
-    header_length = widgets.IntText(value=7,style=dict(description_width='150px')),
-    lsb_insert_start_position = widgets.IntText(value=66,style=dict(description_width='150px')),
-    skip_last_rows = widgets.IntText(value=2,style=dict(description_width='150px')),
-    hex_recurrence = widgets.IntText(value=4,style=dict(description_width='150px')),
-    bin_string_to_insert = widgets.Text(value='0000',style=dict(description_width='150px')),
-    preview_num = widgets.BoundedIntText(value=5, min=1, max=20, style=dict(description_width='150px')),
+    header_length = widgets.IntText(description='header length', value=7,style=dict(description_width='200px')),
+    lsb_insert_start_position = widgets.IntText(description='lsb insert start position', value=66,style=dict(description_width='200px')),
+    skip_last_rows = widgets.IntText(description='skip last rows', value=2,style=dict(description_width='200px')),
+    hex_recurrence = widgets.IntText(description='hex string recurrence', value=4,style=dict(description_width='200px')),
+    bin_string_to_insert = widgets.Text(description='binary string to insert', value='0000',style=dict(description_width='200px')),
+    preview_num = widgets.BoundedIntText(description='number of preview rows', value=5, min=1, max=20, style=dict(description_width='auto')),
 )
-
-options_widgets = widgets.VBox(list(w_opts.values()))
+options_widgets = widgets.VBox(list(w_opts.values())[:-1])
 
 bdiff = widgets.HTML()
 hdiff = widgets.HTML()
-diff_widgets = widgets.Accordion([widgets.HBox([bdiff,hdiff], layout=dict(flex_flow='wrap'))])
+diff_widgets = widgets.Accordion([widgets.HBox([w_opts['preview_num'], bdiff,hdiff], layout=dict(flex_flow='wrap'))])
 diff_widgets.set_title(0,'Preview')
-
-w = widgets.interactive(update_diff, data=widgets.fixed(filename), **w_opts)
-w.update()
-
 
 # %%
 file_download_widget = widgets.Output()
 
-w_opts = dict(
-    header_length = widgets.IntText(value=7,style=dict(description_width='150px')),
-    lsb_insert_start_position = widgets.IntText(value=66,style=dict(description_width='150px')),
-    skip_last_rows = widgets.IntText(value=2,style=dict(description_width='150px')),
-    hex_recurrence = widgets.IntText(value=4,style=dict(description_width='150px')),
-    bin_string_to_insert = widgets.Text(value='0000',style=dict(description_width='150px')),
-)
+
 uploader = widgets.FileUpload(
     description = 'Upload fuse file',
     button_style = 'primary',
@@ -133,26 +122,29 @@ uploader = widgets.FileUpload(
 uploader_text = widgets.HTML()
 uploader_container = widgets.HBox([uploader, uploader_text])
 
-def _on_processed_btn_clicked(b):
+process_btn = widgets.Button(description='proceed and write file', button_style='success', layout=dict(width='auto'))
+
+def write_file(filename, **kwargs):
     file_download_widget.clear_output()
     with file_download_widget:
-        write_file(**{k:v.value for k,v in w_opts.items()})
-process_btn = widgets.Button(description='proceed and write file', button_style='success', layout=dict(width='auto'))
-process_btn.on_click(_on_processed_btn_clicked)
-
-def write_file(**kwargs):
-    new_filename = process_data(filename, **kwargs)
-    local_file = FileLink(new_filename, result_html_prefix="Click here to download: ")
-    display(local_file)
+        new_filename = process_data(filename, **kwargs)
+        local_file = FileLink(new_filename, result_html_prefix="Click here to download: ")
+        display(local_file)
 
 
 # %%
 def on_upload(change):
     app_contents.children = [uploader_container, options_widgets, diff_widgets, process_btn, file_download_widget]
-    uploader_text.value = uploader.metadata[0]['name']
+    filename = uploader.metadata[0]['name']
+    uploader_text.value = filename
+    w = widgets.interactive(update_diff, data=widgets.fixed(uploader), **w_opts)
+    w.update()
+    process_btn.on_click(lambda b: write_file(filename, **{k:v.value for k,v in w_opts.items()}))
     
 uploader.observe(on_upload, names='value')
-app_contents = widgets.VBox([uploader])   
+app_contents = widgets.VBox([uploader]) 
+app_acc = widgets.Accordion([app_contents])
+app_acc.set_title(0,'Options')
 app_title= widgets.HTML('<h1> Fuse File Editor</h1>')
-app = widgets.VBox([app_title, app_contents])
+app = widgets.VBox([app_title, app_acc])
 app

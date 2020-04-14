@@ -26,7 +26,7 @@ def process_data(data,
                  lsb_insert_start_position = 66,
                  skip_last_rows = 2,
                  hex_recurrence = 4,
-                 bin_string_to_insert = '0000'):
+                 bin_string_to_insert = '0000',**kwargs):
     '''reads fuse file and inserts a binary number at desired position. lsb insert start postion is counted from right to left.
     String to insert is inserted from left to right
     '''
@@ -70,7 +70,7 @@ def process_hex(hex_number,
     
     bin_number = f'{int(hex_number, base=16):092b}' # binary string must be 92 chars long
     bin_number_modified = bin_number[:-lsb_insert_start_position+1] \
-                          + bin_string_to_insert \
+                          + bin_string_to_insert[::-1] \
                           + bin_number[-lsb_insert_start_position+1:]
     hex_number_modified = f'{int(bin_number_modified, base=2):024X}' #hex has 24 chars
 
@@ -78,6 +78,16 @@ def process_hex(hex_number,
             'hex_number_modified':hex_number_modified,
             'bin_number':bin_number,
             'bin_number_modified':bin_number_modified}
+
+
+# %%
+def update_file_preview(lines, header_length=7, hex_recurrence=4, **kwargs):
+    lines_cut = [l.replace('\n','<br>') for l in lines[:header_length+2*hex_recurrence]]
+    header = lines_cut[:header_length]
+    body = lines_cut[header_length:]
+    header_html = f'''<pre style="background-color:powderblue">{''.join(header)}</pre>'''
+    hex_html = ''.join([f'''<pre style="background-color:#76D7C4">{line}</pre>''' if i%hex_recurrence==0 else f'''<pre>{line}</pre>''' for i,line in enumerate(body)])
+    file_preview.value = header_html + hex_html
 
 
 # %%
@@ -91,40 +101,49 @@ def update_diff(data, preview_num=5, hex_recurrence=4, header_length=7, skip_las
     h2 = [n['hex_number_modified'] for n in numbs]
     bdiff.value = difflib.HtmlDiff().make_file(b1[0] if preview_num==1 else b1, b2[0] if preview_num==1 else b2)
     hdiff.value = difflib.HtmlDiff().make_file(h1[0] if preview_num==1 else h1, h2[0] if preview_num==1 else h2)
+    update_file_preview(header+body, header_length=header_length, hex_recurrence=hex_recurrence)
 
 
 # %%
 w_opts = dict(
-    header_length = widgets.IntText(description='header length', value=7,style=dict(description_width='200px')),
-    lsb_insert_start_position = widgets.IntText(description='lsb insert start position', value=66,style=dict(description_width='200px')),
-    skip_last_rows = widgets.IntText(description='skip last rows', value=2,style=dict(description_width='200px')),
-    hex_recurrence = widgets.IntText(description='hex string recurrence', value=4,style=dict(description_width='200px')),
-    bin_string_to_insert = widgets.Text(description='binary string to insert', value='0000',style=dict(description_width='200px')),
+    header_length = widgets.IntText(description='header length', value=7,style=dict(description_width='150px')),
+    lsb_insert_start_position = widgets.IntText(description='lsb insert start position', value=66,style=dict(description_width='150px')),
+    skip_last_rows = widgets.IntText(description='skip last rows', value=2,style=dict(description_width='150px')),
+    hex_recurrence = widgets.IntText(description='hex string recurrence', value=4,style=dict(description_width='150px')),
+    bin_string_to_insert = widgets.Text(description='binary string to insert', value='0000',style=dict(description_width='150px')),
     preview_num = widgets.BoundedIntText(description='number of preview rows', value=5, min=1, max=20, style=dict(description_width='auto')),
 )
-options_widgets = widgets.VBox(list(w_opts.values())[:-1])
+
+file_preview = widgets.HTML()
+file_preview_acc = widgets.Accordion([file_preview])
+file_preview_acc.set_title(0, 'File preview')
+file_preview_acc.layout.flex='1'
+box = widgets.VBox(list(w_opts.values())[:-1])
+options_acc= widgets.Accordion([box])
+options_acc.set_title(0,'Options')
+options_acc.layout.flex='1'
 
 bdiff = widgets.HTML()
 hdiff = widgets.HTML()
 diff_widgets = widgets.Accordion([widgets.HBox([w_opts['preview_num'], bdiff,hdiff], layout=dict(flex_flow='wrap'))])
-diff_widgets.set_title(0,'Preview')
+diff_widgets.set_title(0,'Hex/bin Preview')
+
 
 # %%
-file_download_widget = widgets.Output()
-
-
-uploader = widgets.FileUpload(
-    description = 'Upload fuse file',
-    button_style = 'primary',
-    accept='.fuse',  # Accepted file extension e.g. '.txt', '.pdf', 'image/*', 'image/*,.pdf'
-    multiple=False,  # True to accept multiple files upload else False
-)
-uploader_text = widgets.HTML()
-uploader_container = widgets.HBox([uploader, uploader_text])
-
-process_btn = widgets.Button(description='proceed and write file', button_style='success', layout=dict(width='auto'))
+def restart():
+    global uploader
+    uploader = widgets.FileUpload(
+        description = 'Upload fuse file',
+        button_style = 'primary',
+        accept='.fuse',  # Accepted file extension e.g. '.txt', '.pdf', 'image/*', 'image/*,.pdf'
+        multiple=False,  # True to accept multiple files upload else False
+    )
+    uploader.observe(on_upload, names='value')
+    uploader_container.children = [uploader]
+    app_contents.children = [uploader_container]
 
 def write_file(filename, **kwargs):
+    diff_widgets.selected_index=None
     file_download_widget.clear_output()
     with file_download_widget:
         new_filename = process_data(filename, **kwargs)
@@ -134,17 +153,27 @@ def write_file(filename, **kwargs):
 
 # %%
 def on_upload(change):
-    app_contents.children = [uploader_container, options_widgets, diff_widgets, process_btn, file_download_widget]
+    uploader_container.children = [restart_btn,process_btn, uploader_text]
+    box = widgets.HBox([options_acc, file_preview_acc])
+    app_contents.children = [uploader_container, box, diff_widgets,file_download_widget]
     filename = uploader.metadata[0]['name']
-    uploader_text.value = filename
-    w = widgets.interactive(update_diff, data=widgets.fixed(uploader), **w_opts)
-    w.update()
+    uploader_text.value = f'''<b>{filename}</b>'''
+    w1 = widgets.interactive(update_diff, data=widgets.fixed(uploader), **w_opts)
+    w1.update()
     process_btn.on_click(lambda b: write_file(filename, **{k:v.value for k,v in w_opts.items()}))
     
-uploader.observe(on_upload, names='value')
-app_contents = widgets.VBox([uploader]) 
-app_acc = widgets.Accordion([app_contents])
-app_acc.set_title(0,'Options')
+file_download_widget = widgets.Output()
+
+uploader_container = widgets.HBox()
+uploader_text = widgets.HTML()
+
+process_btn = widgets.Button(description='proceed and write file', button_style='success', layout=dict(width='auto'))
+
+restart_btn = widgets.Button(button_style='warning', description='clear data', icon='trash')
+restart_btn.on_click(lambda b: restart())
+
+app_contents = widgets.VBox([uploader_container]) 
 app_title= widgets.HTML('<h1> Fuse File Editor</h1>')
-app = widgets.VBox([app_title, app_acc])
+app = widgets.VBox([app_title, app_contents])
+restart()
 app

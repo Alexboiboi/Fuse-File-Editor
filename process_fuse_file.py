@@ -78,13 +78,6 @@ def process_hex(hex_number,
             'hex_number_modified':hex_number_modified,
             'bin_number':bin_number,
             'bin_number_modified':bin_number_modified}
-            
-
-if __name__== "__main__":
-    try:
-        process_data(sys.argv[1])
-    except:
-        process_data(filename)
 
 
 # %%

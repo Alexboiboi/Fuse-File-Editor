@@ -1,5 +1,5 @@
-# MagpylibGui  
- A graphical user interface for the magpylib package in jupyter with ipywidgets
+# Fuse-File-Editor
+A graphical user interface for editing of fuse files
  
 * open in jupyter notebook : [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Alexboiboi/Fuse-File-Editor/master) 
 
